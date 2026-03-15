@@ -19,7 +19,7 @@ namespace testPowerConfig
             Config.Set("Database.Port", "1433");
             Config.Set("Database.Credentials.User", "sa");
             Config.Set("Database.Credentials.Password", "123456");
-
+            Config.Root.Database.name.nickname = "hello";
             // 读取
             string server = Config.Get("Database.Server");
             string port = Config.Get("Database.Port");
@@ -42,13 +42,16 @@ namespace testPowerConfig
             listBox1.Items.Clear();
             foreach (string key in Config.Key("Database").GetKeys())
             {
-                string value = Config.Key("Database").Key(key).GetValue();
+                string value = Config.Key("Database").Key(key);
 
                 listBox1.Items.Add($"{key}={value}");
 
             }
             listBox1.Items.Add(Config.Root.Name.Nickname);
-            listBox1.Items.Add(Config.Root.Database.GetValue());
+            listBox1.Items.Add(Config.Root.Database);
+            listBox1.Items.Add(Config.Key("Database").Key("name").Key("nickname"));
+            listBox1.Items.Add(Config.Key("Database").Key("dot").Key("aa"));
+
         }
         private void button1_Click(object sender, EventArgs e)
         {
