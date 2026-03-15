@@ -254,7 +254,7 @@ Console.WriteLine(personNode.GetValue()); // 输出 "3 children"
 
 PowerConfig 采用 MIT 许可证，欢迎提交 Issue 或 Pull Request。
 
-- GitHub 仓库：[https://github.com/您的用户名/PowerConfig](https://github.com/您的用户名/PowerConfig)
-- 问题反馈：[https://github.com/您的用户名/PowerConfig/issues](https://github.com/您的用户名/PowerConfig/issues)
+- GitHub 仓库：[https://github.com/haigear/PowerConfig](https://github.com/haigear/PowerConfig)
+- 问题反馈：[https://github.com/haigear/PowerConfig/issues](https://github.com/haigear/PowerConfig/issues)
 
 感谢您使用 PowerConfig！
