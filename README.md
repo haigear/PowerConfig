@@ -2,33 +2,35 @@
 An elegant dynamic XML configuration library supporting three styles: static methods, indexers, and dynamic properties, with automatic persistence and infinite nesting.
 
 
-# PowerConfig 使用指南
+# PowerConfig 使用说明书
 
 欢迎使用 **PowerConfig** —— 一个为 .NET 应用程序设计的轻量级、零配置的动态 XML 配置库。它提供三种风格 API（静态方法、索引器、动态属性），支持无限层级嵌套，所有修改自动持久化到 `pwrcfg.xml` 文件中。
-
+最新稳定版本1.0.4.可在nuget中直接安装后使用。
 ---
 
 ## ✨ 主要特性
 
 - **零配置启动**：首次使用自动生成配置文件，无需初始化。
 - **三种风格 API**：
-  - 静态方法：`Config.Set` / `Config.Get`
-  - 索引器：`Config.Root["key"]`
-  - 动态属性：`Config.Root.Level1.Level2 = value`
-- **链式节点访问**：通过 `Config.Key` 获取节点对象，支持遍历子节点、读取/设置值。
-- **智能动态读取**：
-  - 叶子节点（有值且无子元素）直接返回字符串。
-  - 容器节点（有子元素）返回节点代理，可通过 `.GetValue()` 获取统计信息（如 `"3 children"`）。
-- **自动创建中间节点**：任意层级的动态赋值都会自动创建缺失的节点。
-- **线程安全**：内部锁保证多线程环境安全。
-- **轻量级**：仅依赖 .NET 内置库。
+  - **静态方法**：`Config.Set` / `Config.Get`，适合键名动态生成的场景。
+  - **索引器**：`Config.Root["key"]`，通过字符串键名访问，灵活且自然。
+  - **动态属性**：`Config.Root.Level1.Level2 = value`，像操作变量一样读写任意层级。
+- **无限层级嵌套**：任意层级的动态赋值都会自动创建中间节点，无需预定义结构。
+- **短路缺失节点**：当访问的节点路径中任何一级不存在时，立即返回 `MissingNode`，后续所有访问均不报错。
+- **智能隐式转换**：将动态属性赋值给 `string` 变量时自动转换：
+  - 叶子节点 → 存储的字符串值
+  - 容器节点 → 子节点数量统计，如 `"2 children"`
+  - 缺失节点 → **`"node or value not exist"`**
+- **链式节点访问**：通过 `Config.Key` 获取节点对象，支持遍历子节点、判断存在性等。
+- **自动持久化**：每次修改立即保存到 XML 文件，无需手动调用 `Save`。
+- **线程安全**：内部锁保证多线程环境下的读写安全。
+- **轻量级**：仅依赖 .NET 内置库，无外部依赖。
 
 ---
 
 ## 📦 安装
 
 ### 通过 NuGet 安装（推荐）
-在 Visual Studio 中打开“管理 NuGet 程序包”，搜索 `PowerConfig` 并安装；或使用命令行：
 ```bash
 dotnet add package PowerConfig
 ```
@@ -63,31 +65,26 @@ Config.Root["Database.Port"] = "1433";
 Config.Root.Database.Credentials.User = "sa";
 Config.Root.Database.Credentials.Password = "123456";
 Config.Root.Person.Name = "John";
-Config.Root.Person.Age = "30";
 Config.Root.Person.Address.City = "New York";  // 自动创建 Address 节点
 ```
 
 ### 3. 读取配置
 
 ```csharp
-// 静态方法
+// 叶子节点直接返回字符串
 string appName = Config.Get("AppName");                 // "MyApp"
-string server = Config.Get("Database.Server");          // "localhost"
+string server = Config.Root.Database.Server;            // "localhost"
 
-// 索引器
-string version = Config.Root["Version"];                 // "1.0.0"
+// 容器节点返回统计信息
+string yoloInfo = Config.Root.Database;                 // "2 children"
 
-// 动态属性（叶子节点直接返回字符串）
-string user = Config.Root.Database.Credentials.User;    // "sa"
-string city = Config.Root.Person.Address.City;          // "New York"
+// 不存在的节点返回友好提示
+string nonExist = Config.Root.Some.Nonexistent.Path;    // "node or value not exist"
+string deepNonExist = Config.Root.a.b.c.d.e.f;          // "node or value not exist"
 
-// 动态属性（容器节点返回节点代理）
-dynamic personNode = Config.Root.Person;                 // 返回 ConfigNode 代理
-string personInfo = personNode.GetValue();                // 返回 "3 children" (Name, Age, Address)
-
-// 通过链式节点访问获取统计信息
-var dbNode = Config.Key("Database");
-string dbInfo = dbNode.GetValue();                        // 返回 "2 children" (Server, Credentials)
+// 索引器方式（返回 null 或值）
+string port = Config.Root["Database.Port"];              // "1433"
+string missing = Config.Root["Some.Missing"];            // null
 ```
 
 ### 4. 生成的 XML 文件（`pwrcfg.xml`）
@@ -106,7 +103,6 @@ string dbInfo = dbNode.GetValue();                        // 返回 "2 children"
   </Database>
   <Person>
     <Name>John</Name>
-    <Age>30</Age>
     <Address>
       <City>New York</City>
     </Address>
@@ -127,18 +123,31 @@ string dbInfo = dbNode.GetValue();                        // 返回 "2 children"
 | `void Set(string key, string value)` | 通过点号路径设置值（如 `"Database.Server"`）。 |
 | `string Get(string key)` | 通过点号路径获取值，不存在返回 `null`。 |
 | `IEnumerable<string> GetKeys()` | 获取所有顶级键名。 |
-| `bool ContainsKey(string key)` | 判断指定路径的节点是否存在。 |
-| `ConfigNode Key(string path)` | 获取节点对象，用于链式遍历。 |
+| `bool ContainsKey(string key)` | 判断指定路径的节点是否存在（作为叶子或容器）。 |
+| `ConfigNodeBase Key(string path)` | 获取节点对象，用于链式遍历。 |
 
-### 类 `ConfigNode`（节点代理）
+### 节点基类 `ConfigNodeBase`
+
+所有动态属性返回的对象都派生自此类，包含以下成员：
 
 | 成员 | 描述 |
 |------|------|
-| `ConfigNode Key(string name)` | 获取子节点代理。 |
+| `ConfigNodeBase Key(string name)` | 获取子节点代理。 |
 | `IEnumerable<string> GetKeys()` | 获取当前节点下的直接子键名。 |
-| `string GetValue()` | 获取当前节点的值：<br>- 叶子节点返回存储的字符串。<br>- 容器节点返回统计信息，如 `"3 children"`。<br>- 不存在的节点返回 `null`。 |
-| `void SetValue(string value)` | 设置当前节点的值（会覆盖原有内容）。 |
+| `void SetValue(string value)` | 设置当前节点的值（会使其成为叶子）。 |
 | `bool Exists()` | 判断当前节点是否存在。 |
+| `override string ToString()` | 返回字符串表示（与隐式转换相同）。 |
+| `static implicit operator string(ConfigNodeBase node)` | 隐式转换为字符串。 |
+
+### 隐式转换规则
+
+将节点对象赋值给 `string` 变量时自动触发：
+
+| 节点类型 | 转换结果 |
+|----------|----------|
+| 叶子节点 | 存储的字符串值 |
+| 容器节点 | `"{n} children"`（n 为直接子节点数量） |
+| 缺失节点 | `"node or value not exist"` |
 
 ---
 
@@ -150,49 +159,41 @@ Config.Root.User.Name = "Alice";
 Config.Root.User.Email = "alice@example.com";
 string name = Config.Root.User.Name;          // "Alice"
 string email = Config.Root.User.Email;         // "alice@example.com"
+string userInfo = Config.Root.User;            // "2 children"
 ```
 
 ### 2. 遍历 Database 下的所有子属性
 ```csharp
 var dbNode = Config.Key("Database");
-Console.WriteLine($"Database has {dbNode.GetValue()}"); // 如 "Database has 2 children"
-
-foreach (var key in dbNode.GetKeys())
+if (dbNode.Exists())
 {
-    var child = dbNode.Key(key);
-    if (child.GetKeys().Any()) // 有子节点
+    Console.WriteLine($"Database has {dbNode}"); // 隐式转换，如 "Database has 2 children"
+    foreach (var key in dbNode.GetKeys())
     {
-        Console.WriteLine($"  {key}/ ({child.GetValue()})");
-        foreach (var subKey in child.GetKeys())
-        {
-            string value = child.Key(subKey).GetValue();
-            Console.WriteLine($"    {subKey} = {value}");
-        }
-    }
-    else
-    {
-        string value = child.GetValue();
-        Console.WriteLine($"  {key} = {value}");
+        var child = dbNode.Key(key);
+        if (child.GetKeys().Any())
+            Console.WriteLine($"  {key}/ ({child})");
+        else
+            Console.WriteLine($"  {key} = {child}");
     }
 }
 ```
 
 ### 3. 递归遍历所有配置
 ```csharp
-void Traverse(ConfigNode node, string indent = "")
+void Traverse(ConfigNodeBase node, string indent = "")
 {
     foreach (var key in node.GetKeys())
     {
         var child = node.Key(key);
-        string val = child.GetValue();
         if (child.GetKeys().Any())
         {
-            Console.WriteLine($"{indent}{key}/ ({val})");
+            Console.WriteLine($"{indent}{key}/ ({child})");
             Traverse(child, indent + "  ");
         }
         else
         {
-            Console.WriteLine($"{indent}{key} = {val}");
+            Console.WriteLine($"{indent}{key} = {child}");
         }
     }
 }
@@ -202,11 +203,19 @@ Traverse(Config.Key(""));
 ### 4. 使用默认值
 ```csharp
 int port = int.Parse(Config.Get("Database.Port") ?? "1433");
+// 或通过动态属性 + 隐式转换
+string portStr = Config.Root.Database.Port; // 如果不存在，返回 "node or value not exist"
+if (portStr != "node or value not exist" && int.TryParse(portStr, out int p))
+    port = p;
+else
+    port = 1433;
 ```
 
 ### 5. 修改深层节点的值
 ```csharp
 Config.Key("Database").Key("Port").SetValue("5432");
+// 或直接动态属性赋值
+Config.Root.Database.Port = "5432";
 ```
 
 ### 6. 检查节点是否存在
@@ -217,38 +226,33 @@ if (Config.Key("Database.Credentials").Exists())
 }
 ```
 
-### 7. 叶子节点自动转换为容器
+### 7. 给缺失节点赋值（自动创建）
 ```csharp
-Config.Root.Temp = "temp value";       // Temp 是叶子
-Config.Root.Temp.Key = "new value";     // 自动将 Temp 转换为容器，原值丢失
-string tempVal = Config.Root.Temp;       // 返回代理，不是字符串
-string tempStr = Config.Root.Temp.GetValue(); // 返回 "1 child"
-string keyVal = Config.Root.Temp.Key;    // "new value"
+Config.Root.NewSection.NewSubSection.Value = "created";
+string val = Config.Root.NewSection.NewSubSection.Value; // "created"
 ```
 
-### 8. 直接使用 GetValue 获取统计信息
+### 8. 安全读取不存在节点（无需 try-catch）
 ```csharp
-var personNode = Config.Key("Person");
-Console.WriteLine(personNode.GetValue()); // 输出 "3 children"
+string result = Config.Root.A.B.C.D.E.F; // 永远返回 "node or value not exist"
 ```
 
 ---
 
 ## ⚠️ 注意事项
 
-- **所有值均为字符串**：读取后需自行转换类型（如 `int.Parse`）。
-- **动态属性读取规则**：
-  - 叶子节点（有值且无子元素）直接返回 `string`。
-  - 容器节点（有子元素）返回 `ConfigNode` 代理，可通过 `.GetValue()` 获取统计信息。
-  - 不存在的节点返回 `ConfigNode` 代理（允许后续赋值）。
+- **所有值均为字符串**：存储时自动转为字符串，读取后需自行转换类型。
 - **动态属性赋值规则**：
-  - 如果目标节点是叶子，赋值给它的子属性会自动将其转换为容器（原值丢失）。
-  - 直接给节点赋字符串值（如 `Config.Root.Node = "value"`）会使其成为叶子。
-- **配置文件位置**：默认保存在应用程序工作目录（`Environment.CurrentDirectory`），可修改 `DynamicConfig` 构造函数指定路径。
-- **线程安全**：所有公共方法都是线程安全的，可放心在多线程环境使用。
+  - 给叶子节点赋字符串值：正常更新。
+  - 给容器节点赋字符串值：节点变为叶子，原有子节点全部丢失。
+  - 给缺失节点赋字符串值：自动创建所有中间节点，并设置叶子值。
+- **隐式转换**：将动态属性赋值给 `string` 变量时自动触发，无需显式调用方法。
+- **线程安全**：所有公共方法都是线程安全的。
+- **配置文件位置**：默认保存在应用程序工作目录（`Environment.CurrentDirectory`），文件名为 `pwrcfg.xml`。
 - **键名区分大小写**：`"Database.Server"` 与 `"database.server"` 不同。
 
 ---
+
 
 ## 🤝 贡献与许可
 
